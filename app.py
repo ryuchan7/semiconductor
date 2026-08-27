@@ -1,7 +1,8 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
+import json
 import joblib
+import numpy as np
+import pandas as pd
+import streamlit as st
 import shap
 import matplotlib.pyplot as plt
 
@@ -75,18 +76,97 @@ def load_demo_data():
     )
 
 
-(
-    rf_model,
-    rf_imputer,
-    iso_model,
-    anomaly_imputer,
-    feature_names,
-    thresholds,
-    explainer
-) = load_models()
+# ==========================================================
+# LOAD MODEL METRICS
+# ==========================================================
+
+@st.cache_data
+def load_metrics():
+
+    with open(
+        "results/metrics.json",
+        "r",
+        encoding="utf-8"
+    ) as file:
+
+        return json.load(file)
 
 
-demo_data = load_demo_data()
+# ==========================================================
+# LOAD EVERYTHING
+# ==========================================================
+
+try:
+
+    (
+        rf_model,
+        rf_imputer,
+        iso_model,
+        anomaly_imputer,
+        feature_names,
+        thresholds,
+        explainer
+    ) = load_models()
+
+except Exception as error:
+
+    st.error(
+        f"Unable to load trained models: {error}"
+    )
+
+    st.info(
+        "Run: python src\\train_models.py"
+    )
+
+    st.stop()
+
+
+try:
+
+    demo_data = load_demo_data()
+
+except Exception as error:
+
+    st.error(
+        f"Unable to load demo data: {error}"
+    )
+
+    st.stop()
+
+
+try:
+
+    metrics = load_metrics()
+
+except Exception as error:
+
+    st.error(
+        f"Unable to load model metrics: {error}"
+    )
+
+    st.info(
+        "Run the training pipeline first: "
+        "python src\\train_models.py"
+    )
+
+    st.stop()
+
+
+# ==========================================================
+# METRICS
+# ==========================================================
+
+rf_metrics = metrics[
+    "random_forest"
+]
+
+iso_metrics = metrics[
+    "isolation_forest"
+]
+
+dataset_metrics = metrics[
+    "dataset"
+]
 
 
 # ==========================================================
@@ -163,6 +243,21 @@ st.sidebar.write(
 
 st.sidebar.divider()
 
+st.sidebar.subheader(
+    "Current Thresholds"
+)
+
+st.sidebar.write(
+    f"Yield risk: **{rf_threshold:.3f}**"
+)
+
+st.sidebar.write(
+    f"Anomaly: **{anomaly_threshold:.6f}**"
+)
+
+
+st.sidebar.divider()
+
 st.sidebar.caption(
     "Semiconductor Process Intelligence Prototype"
 )
@@ -173,7 +268,9 @@ st.sidebar.caption(
 # ANALYZE ONE SAMPLE
 # ==========================================================
 
-def analyze_single_sample(X_sample):
+def analyze_single_sample(
+    X_sample
+):
 
     # ------------------------------------------------------
     # RANDOM FOREST
@@ -211,7 +308,8 @@ def analyze_single_sample(X_sample):
     )
 
     anomaly_prediction = (
-        anomaly_score >= anomaly_threshold
+        anomaly_score
+        >= anomaly_threshold
     )
 
 
@@ -227,7 +325,7 @@ def analyze_single_sample(X_sample):
 
 
     # ------------------------------------------------------
-    # HANDLE SHAP OUTPUT FORMAT
+    # HANDLE SHAP OUTPUT FORMATS
     # ------------------------------------------------------
 
     if isinstance(
@@ -248,7 +346,7 @@ def analyze_single_sample(X_sample):
         )
 
         # Example:
-        # (1, 446, 2)
+        # (1, features, classes)
 
         if sample_shap_array.ndim == 3:
 
@@ -261,7 +359,7 @@ def analyze_single_sample(X_sample):
             )
 
         # Example:
-        # (1, 446)
+        # (1, features)
 
         elif sample_shap_array.ndim == 2:
 
@@ -277,7 +375,7 @@ def analyze_single_sample(X_sample):
 
 
     # ------------------------------------------------------
-    # SHAP TABLE
+    # SHAP DATAFRAME
     # ------------------------------------------------------
 
     shap_df = pd.DataFrame(
@@ -288,6 +386,7 @@ def analyze_single_sample(X_sample):
         }
     )
 
+
     shap_df[
         "Importance"
     ] = np.abs(
@@ -295,6 +394,7 @@ def analyze_single_sample(X_sample):
             "SHAP Value"
         ]
     )
+
 
     shap_df[
         "Direction"
@@ -305,6 +405,7 @@ def analyze_single_sample(X_sample):
         "Toward FAIL",
         "Toward PASS"
     )
+
 
     shap_df = shap_df.sort_values(
         by="Importance",
@@ -439,6 +540,10 @@ def display_single_sample_analysis(
         )
 
 
+    # ------------------------------------------------------
+    # PREDICTION CORRECTNESS
+    # ------------------------------------------------------
+
     if actual_class is not None:
 
         if rf_prediction == actual_class:
@@ -503,7 +608,7 @@ def display_single_sample_analysis(
 
 
     # ======================================================
-    # COMBINED AI STATUS
+    # COMBINED STATUS
     # ======================================================
 
     st.subheader(
@@ -602,7 +707,9 @@ def display_single_sample_analysis(
             "⚠ Factors Toward FAIL"
         )
 
-        if len(toward_fail) > 0:
+        if len(
+            toward_fail
+        ) > 0:
 
             st.dataframe(
                 toward_fail[
@@ -619,8 +726,8 @@ def display_single_sample_analysis(
         else:
 
             st.info(
-                "No variables are pushing "
-                "the model toward FAIL."
+                "No process variables are currently "
+                "pushing the model toward FAIL."
             )
 
 
@@ -630,7 +737,9 @@ def display_single_sample_analysis(
             "✓ Factors Toward PASS"
         )
 
-        if len(toward_pass) > 0:
+        if len(
+            toward_pass
+        ) > 0:
 
             st.dataframe(
                 toward_pass[
@@ -647,8 +756,8 @@ def display_single_sample_analysis(
         else:
 
             st.info(
-                "No variables are pushing "
-                "the model toward PASS."
+                "No process variables are currently "
+                "pushing the model toward PASS."
             )
 
 
@@ -853,9 +962,7 @@ else:
 
     missing_features = [
         feature
-
         for feature in feature_names
-
         if feature
         not in uploaded_data.columns
     ]
@@ -931,9 +1038,7 @@ else:
     uploaded_rf_prediction = np.where(
         uploaded_fail_probability
         >= rf_threshold,
-
         1,
-
         -1
     )
 
@@ -986,9 +1091,7 @@ else:
             "AI Prediction": np.where(
                 uploaded_rf_prediction
                 == 1,
-
                 "FAIL",
-
                 "PASS"
             ),
 
@@ -998,9 +1101,7 @@ else:
 
             "Anomaly Status": np.where(
                 uploaded_anomaly_prediction,
-
                 "ANOMALY",
-
                 "NORMAL"
             )
         }
@@ -1363,7 +1464,7 @@ else:
         linestyle="--",
         label=(
             f"Failure Threshold "
-            f"({rf_threshold * 100:.0f}%)"
+            f"({rf_threshold * 100:.1f}%)"
         )
     )
 
@@ -1451,7 +1552,7 @@ else:
 
 
     # ======================================================
-    # FORMAT DISPLAY RESULTS
+    # FORMAT RESULTS
     # ======================================================
 
     display_results = (
@@ -1653,10 +1754,12 @@ else:
 
 
     # ------------------------------------------------------
-    # HELPER FOR DROPDOWN LABEL
+    # DROPDOWN LABEL
     # ------------------------------------------------------
 
-    def review_sample_label(sample_id):
+    def review_sample_label(
+        sample_id
+    ):
 
         row = batch_results.loc[
             sample_id
@@ -1674,17 +1777,19 @@ else:
     # SAMPLE SELECTOR
     # ------------------------------------------------------
 
-    selected_review_sample = st.selectbox(
-        "Select sample for investigation",
-        options=review_samples[
-            "Sample"
-        ].tolist(),
-        format_func=review_sample_label
+    selected_review_sample = (
+        st.selectbox(
+            "Select sample for investigation",
+            options=review_samples[
+                "Sample"
+            ].tolist(),
+            format_func=review_sample_label
+        )
     )
 
 
     # ======================================================
-    # RETRIEVE SELECTED SAMPLE
+    # RETRIEVE SAMPLE
     # ======================================================
 
     selected_uploaded_sample = (
@@ -1738,20 +1843,14 @@ else:
     )
 
 
-    if (
-        selected_alert
-        == "HIGH RISK"
-    ):
+    if selected_alert == "HIGH RISK":
 
         st.error(
             "🚨 HIGH RISK — Failure prediction and "
             "anomaly detection both raised an alert."
         )
 
-    elif (
-        selected_alert
-        == "WARNING"
-    ):
+    elif selected_alert == "WARNING":
 
         st.warning(
             "⚠ WARNING — At least one AI system "
@@ -1766,7 +1865,7 @@ else:
 
 
     # ======================================================
-    # RUN DETAILED INVESTIGATION
+    # DETAILED INVESTIGATION
     # ======================================================
 
     display_single_sample_analysis(
@@ -1826,9 +1925,7 @@ else:
 
 
     st.download_button(
-        label=(
-            "Download Analysis Results"
-        ),
+        label="Download Analysis Results",
         data=csv_results,
         file_name=(
             "semiconductor_ai_results.csv"
@@ -1838,15 +1935,19 @@ else:
 
 
 # ==========================================================
-# MODEL INFORMATION
+# MODEL PERFORMANCE
 # ==========================================================
 
 st.divider()
 
 st.header(
-    "Model Information"
+    "Model Performance"
 )
 
+
+# ==========================================================
+# RANDOM FOREST PERFORMANCE
+# ==========================================================
 
 info_col1, info_col2 = (
     st.columns(2)
@@ -1865,26 +1966,59 @@ with info_col1:
 
     st.write(
         f"**Decision Threshold:** "
-        f"{rf_threshold:.2f}"
+        f"{rf_threshold:.4f}"
     )
 
     st.write(
-        "**Test FAIL Recall:** 52.4%"
+        f"**Accuracy:** "
+        f"{rf_metrics['accuracy'] * 100:.1f}%"
     )
 
     st.write(
-        "**Test FAIL Precision:** 19.6%"
+        f"**FAIL Precision:** "
+        f"{rf_metrics['fail_precision'] * 100:.1f}%"
     )
 
     st.write(
-        "**Test ROC-AUC:** 0.769"
+        f"**FAIL Recall:** "
+        f"{rf_metrics['fail_recall'] * 100:.1f}%"
     )
 
     st.write(
-        "**Purpose:** Predict whether a semiconductor "
-        "process sample has elevated yield failure risk."
+        f"**FAIL F1-score:** "
+        f"{rf_metrics['fail_f1']:.3f}"
     )
 
+    st.write(
+        f"**ROC-AUC:** "
+        f"{rf_metrics['roc_auc']:.3f}"
+    )
+
+    st.write(
+        f"**PR-AUC:** "
+        f"{rf_metrics['pr_auc']:.3f}"
+    )
+
+    st.write(
+        f"**Detected FAIL:** "
+        f"{rf_metrics['detected_fail']}/"
+        f"{rf_metrics['total_fail']}"
+    )
+
+    st.write(
+        f"**False Alarms:** "
+        f"{rf_metrics['false_alarms']}"
+    )
+
+    st.write(
+        "**Purpose:** Primary supervised model "
+        "for semiconductor yield-risk prediction."
+    )
+
+
+# ==========================================================
+# ISOLATION FOREST PERFORMANCE
+# ==========================================================
 
 with info_col2:
 
@@ -1902,62 +2036,130 @@ with info_col2:
     )
 
     st.write(
-        "**Test FAIL Recall:** 52.4%"
+        f"**Accuracy:** "
+        f"{iso_metrics['accuracy'] * 100:.1f}%"
     )
 
     st.write(
-        "**Test ROC-AUC:** 0.574"
+        f"**FAIL Precision:** "
+        f"{iso_metrics['fail_precision'] * 100:.1f}%"
     )
 
     st.write(
-        "**Purpose:** Detect process behaviour that "
-        "differs from learned normal PASS production."
+        f"**FAIL Recall:** "
+        f"{iso_metrics['fail_recall'] * 100:.1f}%"
+    )
+
+    st.write(
+        f"**FAIL F1-score:** "
+        f"{iso_metrics['fail_f1']:.3f}"
+    )
+
+    st.write(
+        f"**ROC-AUC:** "
+        f"{iso_metrics['roc_auc']:.3f}"
+    )
+
+    st.write(
+        f"**PR-AUC:** "
+        f"{iso_metrics['pr_auc']:.3f}"
+    )
+
+    st.write(
+        f"**Detected FAIL:** "
+        f"{iso_metrics['detected_fail']}/"
+        f"{iso_metrics['total_fail']}"
+    )
+
+    st.write(
+        f"**False Alarms:** "
+        f"{iso_metrics['false_alarms']}"
+    )
+
+    st.write(
+        "**Purpose:** Secondary unsupervised model "
+        "for abnormal process behaviour detection."
     )
 
 
 # ==========================================================
-# DATASET INFORMATION
+# DATASET & PIPELINE INFORMATION
 # ==========================================================
 
 with st.expander(
-    "Dataset & Method Information"
+    "Dataset & Training Pipeline Information"
 ):
 
-    st.write(
-        "**Dataset:** UCI SECOM Semiconductor Manufacturing Dataset"
+    st.subheader(
+        "Dataset"
     )
 
     st.write(
-        "**Original process variables:** 590"
+        "**Dataset:** "
+        "UCI SECOM Semiconductor Manufacturing Dataset"
     )
 
     st.write(
-        "**Variables used after preprocessing:** 446"
+        f"**Total samples:** "
+        f"{dataset_metrics['samples']}"
     )
 
     st.write(
-        f"**Random Forest threshold:** "
-        f"{rf_threshold:.2f}"
+        f"**Original process variables:** "
+        f"{dataset_metrics['original_features']}"
     )
 
     st.write(
-        f"**Isolation Forest threshold:** "
-        f"{anomaly_threshold:.6f}"
+        f"**Final process variables:** "
+        f"{dataset_metrics['final_features']}"
+    )
+
+
+    st.subheader(
+        "Preprocessing"
     )
 
     st.write(
-        "Random Forest provides supervised yield-risk "
-        "prediction."
+        f"**Constant features removed:** "
+        f"{dataset_metrics['constant_features_removed']}"
     )
 
     st.write(
-        "Isolation Forest provides unsupervised "
-        "process-anomaly detection."
+        f"**High-missing features removed:** "
+        f"{dataset_metrics['high_missing_features_removed']}"
     )
 
     st.write(
-        "SHAP explains how individual process variables "
-        "influence Random Forest predictions."
+        "**Missing-value strategy:** Median imputation"
+    )
+
+    st.write(
+        "**Feature filtering:** Learned using training data only"
+    )
+
+
+    st.subheader(
+        "Methodology"
+    )
+
+    st.write(
+        "Random Forest provides supervised "
+        "semiconductor yield-risk prediction."
+    )
+
+    st.write(
+        "Isolation Forest learns normal PASS behaviour "
+        "and identifies unusual manufacturing processes."
+    )
+
+    st.write(
+        "Thresholds are selected using a validation set "
+        "before final evaluation on the untouched test set."
+    )
+
+    st.write(
+        "SHAP is used to explain how individual process "
+        "variables influence Random Forest predictions."
     )
 
 
@@ -1974,9 +2176,4 @@ st.caption(
     "AI predictions are experimental and intended for research "
     "and educational purposes. SHAP values explain model "
     "behaviour and do not establish causal relationships."
-
 )
-
-st.write("**Test FAIL Recall:** 52.4%")
-st.write("**Test FAIL Precision:** 19.6%")
-st.write("**Test ROC-AUC:** 0.769")
