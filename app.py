@@ -1974,4 +1974,9 @@ st.caption(
     "AI predictions are experimental and intended for research "
     "and educational purposes. SHAP values explain model "
     "behaviour and do not establish causal relationships."
+
 )
+
+st.write("**Test FAIL Recall:** 52.4%")
+st.write("**Test FAIL Precision:** 19.6%")
+st.write("**Test ROC-AUC:** 0.769")
