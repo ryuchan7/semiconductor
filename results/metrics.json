@@ -1,0 +1,37 @@
+{
+    "dataset": {
+        "samples": 1567,
+        "original_features": 590,
+        "final_features": 450,
+        "constant_features_removed": 116,
+        "high_missing_features_removed": 24
+    },
+    "random_forest": {
+        "threshold": 0.11,
+        "accuracy": 0.8535031847133758,
+        "fail_precision": 0.20930232558139536,
+        "fail_recall": 0.42857142857142855,
+        "fail_f1": 0.28125,
+        "roc_auc": 0.8005850804485617,
+        "pr_auc": 0.23526309528653178,
+        "correct_pass": 259,
+        "false_alarms": 34,
+        "missed_fail": 12,
+        "detected_fail": 9,
+        "total_fail": 21
+    },
+    "isolation_forest": {
+        "threshold": 0.4079635217925718,
+        "accuracy": 0.5955414012738853,
+        "fail_precision": 0.09230769230769231,
+        "fail_recall": 0.5714285714285714,
+        "fail_f1": 0.15894039735099338,
+        "roc_auc": 0.6136843816024704,
+        "pr_auc": 0.19868333411537314,
+        "correct_pass": 175,
+        "false_alarms": 118,
+        "missed_fail": 9,
+        "detected_fail": 12,
+        "total_fail": 21
+    }
+}
